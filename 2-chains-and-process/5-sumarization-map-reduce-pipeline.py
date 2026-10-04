@@ -1,22 +1,19 @@
-from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.runnables import RunnableLambda
-from langchain_core.globals import set_debug
+"""Map-reduce summarization built with LCEL (no legacy load_summarize_chain).
+
+Run: uv run python 2-chains-and-process/5-sumarization-map-reduce-pipeline.py
+"""
+
 from dotenv import load_dotenv
+from langchain_core.globals import set_debug
+from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable, RunnableLambda
 
-# Load environment variables from .env file
+from learning_langchain.cli import ask, ask_yes_no
+from learning_langchain.models import get_chat_model
+
+# Load environment variables (API keys, LLM_PROVIDER, ...) from the .env file.
 load_dotenv()
-
-# set_debug(True) turns on LangChain's global debug tracing. Unlike
-# set_verbose, it prints every step of the pipeline (chain/start, prompt
-# input, llm/start, llm/end, tokens, etc.) directly to the console, which is
-# exactly what we want to visualize how the LLM is invoked at each stage of
-# the map-reduce summarization below.
-set_debug(True)
-
-# Chat model (Google GenAI / Gemini) used both to auto-generate fallback text
-# and to run the map and reduce summarization steps.
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
 
 FALLBACK_TOPIC = "the FIFA World Cup 2026"
 
@@ -26,24 +23,6 @@ fallback_template = PromptTemplate(
     input_variables=["topic"],
     template="Write a short, informative paragraph (4-6 sentences) about {topic}.",
 )
-fallback_chain = fallback_template | model
-
-
-def read_document(order: str) -> str:
-    """Ask the user for a text; if ENTER is pressed (empty input), auto-generate
-    a paragraph about the FIFA World Cup 2026 instead, using the LLM itself."""
-    text = input(
-        f"Enter the {order} text to summarize "
-        "(press ENTER to auto-generate a text about the FIFA World Cup 2026): "
-    ).strip()
-    if text:
-        return text
-    generated = fallback_chain.invoke({"topic": FALLBACK_TOPIC})
-    return generated.content.strip()
-
-
-# Collect the 3 source documents dynamically from user input (or auto-generated).
-documents = [read_document(order) for order in ("first", "second", "third")]
 
 # ---- MAP step ----
 # Prompt template used to summarize each individual document on its own.
@@ -51,16 +30,6 @@ map_template = PromptTemplate(
     input_variables=["document"],
     template="Summarize the following text in 2 concise sentences:\n\n{document}",
 )
-map_chain = map_template | model
-
-
-def map_documents(docs: list) -> list:
-    """MAP step of map-reduce: summarize each document independently,
-    producing one partial summary per input document."""
-    return [map_chain.invoke({"document": doc}).content.strip() for doc in docs]
-
-
-map_runnable = RunnableLambda(map_documents)
 
 # ---- REDUCE step ----
 # Prompt template used to combine all the partial (map) summaries into a
@@ -72,7 +41,6 @@ reduce_template = PromptTemplate(
         "Combine them into a single, coherent final summary."
     ),
 )
-reduce_chain = reduce_template | model
 
 
 def format_summaries(summaries: list) -> dict:
@@ -82,15 +50,55 @@ def format_summaries(summaries: list) -> dict:
     return {"summaries": joined}
 
 
-format_runnable = RunnableLambda(format_summaries)
+def build_pipeline(model: BaseChatModel) -> Runnable:
+    """Full map-reduce pipeline, built with LCEL ("|" pipe operator):
+    1) map_runnable: summarizes each document individually (map)
+    2) format_runnable: formats the partial summaries into one reduce input
+    3) reduce_template | model: combines all partial summaries into one (reduce)
 
-# Full map-reduce pipeline, built with LCEL ("|" pipe operator):
-# 1) map_runnable: summarizes each of the 3 documents individually (map)
-# 2) format_runnable: formats the 3 partial summaries into one reduce input
-# 3) reduce_chain: combines all partial summaries into one final summary (reduce)
-pipeline = map_runnable | format_runnable | reduce_chain
+    Analogy: several people each summarize one chapter (map), then an
+    editor merges their notes into the book's summary (reduce).
+    """
+    map_chain = map_template | model
 
-final_summary = pipeline.invoke(documents)
+    def map_documents(docs: list) -> list:
+        """MAP step of map-reduce: summarize each document independently,
+        producing one partial summary per input document."""
+        return [map_chain.invoke({"document": doc}).text.strip() for doc in docs]
 
-print("\n=== FINAL SUMMARY ===")
-print(final_summary.content.strip())
+    return RunnableLambda(map_documents) | RunnableLambda(format_summaries) | reduce_template | model
+
+
+def read_document(model: BaseChatModel, order: str) -> str:
+    """Ask the user for a text; if ENTER is pressed (empty input), auto-generate
+    a paragraph about the FIFA World Cup 2026 instead, using the LLM itself."""
+    text = ask(f"Enter the {order} text to summarize", "")
+    if text:
+        return text
+    generated = (fallback_template | model).invoke({"topic": FALLBACK_TOPIC})
+    return generated.text.strip()
+
+
+def main() -> None:
+    # set_debug(True) turns on LangChain's global debug tracing: it prints
+    # every step of the pipeline (chain/start, llm/start, llm/end, ...) to
+    # the console. set_verbose() has no visible effect on LCEL pipelines.
+    set_debug(ask_yes_no("Enable debug mode (prints every step)?", default=False))
+
+    model = get_chat_model(
+        fake_responses=[
+            "The 2026 FIFA World Cup is hosted by Canada, Mexico and the United States.",
+            "It is the first edition with 48 teams.",
+        ]
+    )
+
+    # Collect the 3 source documents dynamically from user input (or auto-generated).
+    documents = [read_document(model, order) for order in ("first", "second", "third")]
+    final_summary = build_pipeline(model).invoke(documents)
+
+    print("\n=== FINAL SUMMARY ===")
+    print(final_summary.text.strip())
+
+
+if __name__ == "__main__":
+    main()

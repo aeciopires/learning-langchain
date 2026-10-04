@@ -1,24 +1,41 @@
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from dotenv import load_dotenv
+"""ChatPromptTemplate: a template made of messages with roles (system/user).
 
-# Load environment variables from .env file
+Run: uv run python 1-fundamentals/4-chat-prompt-template.py
+"""
+
+from dotenv import load_dotenv
+from langchain_core.prompts import ChatPromptTemplate
+
+from learning_langchain.models import get_chat_model
+
+# Load environment variables (API keys, LLM_PROVIDER, ...) from the .env file.
 load_dotenv()
 
-gemini = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
-
-messages = [
-  ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
-  ("user", "{sentence}")
-]
-
-chat_prompt = ChatPromptTemplate(messages)
-
-formatted_messages = chat_prompt.format_messages(
-    input_language="Portuguese",
-    output_language="English",
-    sentence="Eu estou aprendendo a programar em LangChain.",
+# Each tuple is (role, template). The "system" message sets the model's
+# behavior; the "user" message carries the actual request.
+chat_prompt = ChatPromptTemplate(
+    [
+        ("system", "You are a helpful assistant that translates {input_language} to {output_language}."),
+        ("user", "{sentence}"),
+    ]
 )
 
-answer = gemini.invoke(formatted_messages)
-print(answer.content)
+
+def main() -> None:
+    # format_messages() returns a list of messages (SystemMessage, HumanMessage)
+    # with every placeholder filled - ready to be sent to a chat model.
+    messages = chat_prompt.format_messages(
+        input_language="Portuguese",
+        output_language="English",
+        sentence="Eu estou aprendendo a programar em LangChain.",
+    )
+    for message in messages:
+        print(f"{type(message).__name__}: {message.content}")
+
+    model = get_chat_model(fake_responses=["I am learning to program in LangChain."])
+    answer = model.invoke(messages)
+    print("Answer:", answer.text)
+
+
+if __name__ == "__main__":
+    main()

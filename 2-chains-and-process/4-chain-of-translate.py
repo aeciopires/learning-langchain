@@ -1,9 +1,16 @@
-from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.runnables import RunnableLambda, chain
-from dotenv import load_dotenv
+"""A reusable translation chain with dynamic source and target languages.
 
-# Load environment variables from .env file
+Run: uv run python 2-chains-and-process/4-chain-of-translate.py
+"""
+
+from dotenv import load_dotenv
+from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable, RunnableLambda, chain
+
+from learning_langchain.models import get_chat_model
+
+# Load environment variables (API keys, LLM_PROVIDER, ...) from the .env file.
 load_dotenv()
 
 
@@ -11,11 +18,11 @@ load_dotenv()
 # before it reaches the prompt template. Both input and output languages are
 # dynamic (received at invoke time), not hardcoded, so we just clean them up
 # here (e.g. removing extra spaces).
-def prepare_input(input: dict) -> dict:
+def prepare_input(data: dict) -> dict:
     return {
-        "input_language": input["input_language"].strip(),
-        "output_language": input["output_language"].strip(),
-        "sentence": input["sentence"].strip(),
+        "input_language": data["input_language"].strip(),
+        "output_language": data["output_language"].strip(),
+        "sentence": data["sentence"].strip(),
     }
 
 
@@ -31,40 +38,51 @@ translation_template = PromptTemplate(
     ),
 )
 
-# Chat model responsible for actually performing the translation.
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
-
 
 # @chain decorator: an alternative, more concise way (compared to
 # RunnableLambda) to turn a plain function into a Runnable. Here it is used
 # to post-process the model's response, keeping only the translated text.
 @chain
 def extract_translation(response) -> str:
-    return response.content.strip()
+    return response.text.strip()
 
 
-# Chain execution order:
-# 1) prepare_input_runnable: cleans up the raw dict received on invoke()
-# 2) translation_template: builds the translation prompt using both dynamic languages
-# 3) model: generates the translated sentence
-# 4) extract_translation: extracts and trims the final text from the model's response
-chain = prepare_input_runnable | translation_template | model | extract_translation
+def build_chain(model: BaseChatModel) -> Runnable:
+    """Chain execution order:
+    1) prepare_input_runnable: cleans up the raw dict received on invoke()
+    2) translation_template: builds the translation prompt using both dynamic languages
+    3) model: generates the translated sentence
+    4) extract_translation: extracts and trims the final text from the model's response
+    """
+    return prepare_input_runnable | translation_template | model | extract_translation
 
-result = chain.invoke(
-    {
-        "input_language": "English",
-        "output_language": "Portuguese",
-        "sentence": "The weather is beautiful today.",
-    }
-)
-print(result)
 
-# Same chain reused with different dynamic languages, proving both are flexible.
-result2 = chain.invoke(
-    {
-        "input_language": "Portuguese",
-        "output_language": "Spanish",
-        "sentence": "Eu adoro aprender novas tecnologias.",
-    }
-)
-print(result2)
+def main() -> None:
+    model = get_chat_model(
+        fake_responses=["O tempo está lindo hoje.", "Me encanta aprender nuevas tecnologías."]
+    )
+    translate = build_chain(model)
+
+    print(
+        translate.invoke(
+            {
+                "input_language": "English",
+                "output_language": "Portuguese",
+                "sentence": "The weather is beautiful today.",
+            }
+        )
+    )
+    # Same chain reused with different dynamic languages, proving both are flexible.
+    print(
+        translate.invoke(
+            {
+                "input_language": "Portuguese",
+                "output_language": "Spanish",
+                "sentence": "Eu adoro aprender novas tecnologias.",
+            }
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
