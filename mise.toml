@@ -1,0 +1,14 @@
+# Pins the tool versions this repository is tested with, so `mise install`
+# installs them the same way on every machine (see REQUIREMENTS.md, section 3.3).
+#
+# - python: kept in sync with .python-version, which `uv` also reads.
+# - uv: manages the Python dependencies (pyproject.toml + uv.lock).
+# - go: used by the 5-golang-for-devops module; kept in sync with the `go`
+#   directive in 5-golang-for-devops/go.mod.
+#
+# "3.14" means "the latest 3.14.x release" (the same idea for the others).
+# Re-check the current releases with `mise ls-remote <tool>` before changing.
+[tools]
+python = "3.14"
+uv = "0.12"
+go = "1.27"

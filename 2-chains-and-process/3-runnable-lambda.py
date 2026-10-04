@@ -1,17 +1,24 @@
-from langchain_core.prompts import PromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.runnables import RunnableLambda
-from dotenv import load_dotenv
+"""RunnableLambda: wrap any Python function so it fits inside a chain.
 
-# Load environment variables from .env file
+Run: uv run python 2-chains-and-process/3-runnable-lambda.py
+"""
+
+from dotenv import load_dotenv
+from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import Runnable, RunnableLambda
+
+from learning_langchain.models import get_chat_model
+
+# Load environment variables (API keys, LLM_PROVIDER, ...) from the .env file.
 load_dotenv()
 
 
 # RunnableLambda wraps a plain Python function so it behaves like any other
 # LangChain "Runnable". This lets us plug arbitrary Python logic into a chain
 # using the "|" pipe operator, just like prompts and models.
-def square(input: dict) -> dict:
-    x = input["x"]
+def square(data: dict) -> dict:
+    x = data["x"]
     return {"square_result": x * x}
 
 
@@ -23,24 +30,30 @@ question_template = PromptTemplate(
     template="Tell me about the number {square_result}",
 )
 
-# Chat model that will answer the question built from the prompt template.
-model = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.5)
-
 
 # A second RunnableLambda used to post-process the model's response, keeping
 # only the text content instead of the full AIMessage object.
 def extract_content(response) -> str:
-    return response.content
+    return response.text
 
 
 to_text = RunnableLambda(extract_content)
 
-# Chain execution order:
-# 1) square_runnable: {"x": 25} -> {"square_result": 625}
-# 2) question_template: builds the prompt text using "square_result"
-# 3) model: generates the answer for the prompt
-# 4) to_text: extracts only the text content from the model's response
-chain = square_runnable | question_template | model | to_text
 
-result = chain.invoke({"x": 25})
-print(result)
+def build_chain(model: BaseChatModel) -> Runnable:
+    """Chain execution order:
+    1) square_runnable: {"x": 25} -> {"square_result": 625}
+    2) question_template: builds the prompt text using "square_result"
+    3) model: generates the answer for the prompt
+    4) to_text: extracts only the text content from the model's response
+    """
+    return square_runnable | question_template | model | to_text
+
+
+def main() -> None:
+    model = get_chat_model(fake_responses=["625 is a perfect square: 25 x 25."])
+    print(build_chain(model).invoke({"x": 25}))
+
+
+if __name__ == "__main__":
+    main()

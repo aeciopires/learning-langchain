@@ -1,0 +1,64 @@
+[project]
+name = "learning-langchain"
+version = "0.2.0"
+description = "A beginner-oriented learning path for LangChain in Python (docs in pt-BR), plus Go for DevOps day-to-day tasks."
+readme = "README.md"
+requires-python = ">=3.14"
+license = { file = "LICENSE" }
+dependencies = [
+    "langchain==1.4.3",
+    "langchain-core==1.6.6",
+    "langchain-google-genai==4.4.0",
+    "langchain-openai==1.6.7",
+    "langchain-text-splitters==1.1.3",
+    "numpy==2.5.3",
+    "python-dotenv==1.2.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+    "mypy>=2.4.0",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.14"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Raised inside the google-genai SDK itself (not this repository's code) on Python 3.14.
+filterwarnings = ["ignore:'_UnionGenericAlias' is deprecated:DeprecationWarning"]
+
+[tool.coverage.run]
+branch = true
+source = [
+    "learning_langchain",
+    "1-fundamentals",
+    "2-chains-and-process",
+    "3-tools-and-agents",
+    "4-rag",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_also = [
+    'if __name__ == .__main__.:',
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["learning_langchain"]

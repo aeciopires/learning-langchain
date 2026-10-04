@@ -1,0 +1,7 @@
+{"time":"2026-10-01T10:00:00Z","level":"INFO","msg":"request","path":"/health","status":200}
+{"time":"2026-10-01T10:00:01Z","level":"INFO","msg":"request","path":"/cart","status":200}
+{"time":"2026-10-01T10:00:02Z","level":"ERROR","msg":"database timeout","path":"/checkout","status":500}
+{"time":"2026-10-01T10:00:03Z","level":"WARN","msg":"slow request","path":"/checkout","status":200}
+{"time":"2026-10-01T10:00:04Z","level":"ERROR","msg":"database timeout","path":"/checkout","status":500}
+{"time":"2026-10-01T10:00:05Z","level":"ERROR","msg":"payment gateway unavailable","path":"/pay","status":503}
+{"time":"2026-10-01T10:00:06Z","level":"INFO","msg":"request","path":"/cart","status":200}
